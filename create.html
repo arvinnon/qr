@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Create Memorial — Alaala Paws</title>
+  <style>
+    :root{--bg:#fbfaf7;--ink:#1c1c1c;--muted:#5a5a5a;--card:#fff;--line:#ece7dd;}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+    .wrap{max-width:980px;margin:0 auto;padding:28px 18px 60px;}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;}
+    .pill{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:var(--card);padding:10px 14px;border-radius:999px;}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;}
+    h1{font-size:28px;margin:16px 0 12px;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    @media (max-width:860px){.grid{grid-template-columns:1fr;}}
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px;}
+    input,textarea{width:100%;box-sizing:border-box;padding:12px;border-radius:14px;border:1px solid var(--line);background:#fff;font-size:15px;}
+    textarea{min-height:120px;resize:vertical;}
+    .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;}
+    button{border-radius:14px;padding:12px 16px;font-weight:800;border:1px solid var(--line);background:var(--card);cursor:pointer;}
+    button.primary{background:#1c1c1c;color:#fff;border-color:#1c1c1c;}
+    button:disabled{opacity:.6;cursor:not-allowed;}
+    .small{font-size:13px;color:var(--muted);line-height:1.4;}
+    .result{display:none;margin-top:14px;}
+    .qrbox{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;}
+    #qrcode{padding:12px;border:1px solid var(--line);border-radius:16px;background:#fff;}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:12px;word-break:break-all;}
+    .warn{background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;padding:10px 12px;border-radius:14px;margin-top:12px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="pill"><strong>Alaala Paws</strong> <span class="small">Create Memorial</span></div>
+      <div class="pill small"><a href="index.html">← Home</a></div>
+    </div>
+
+    <h1>Create a memorial (Online MVP)</h1>
+    <div class="card">
+      <div class="warn small">
+        MVP note: creation is public. For production we’ll add admin login or invite codes to prevent spam.
+      </div>
+
+      <div class="grid" style="margin-top:12px;">
+        <div>
+          <label>Pet Name</label>
+          <input id="petName" placeholder="e.g., Bantay"/>
+        </div>
+        <div>
+          <label>Species</label>
+          <input id="species" placeholder="e.g., Dog / Cat / Rabbit"/>
+        </div>
+        <div>
+          <label>Years (optional)</label>
+          <input id="years" placeholder="e.g., 2012 — 2024"/>
+        </div>
+        <div>
+          <label>Short Tribute Line</label>
+          <input id="tagline" placeholder="e.g., Salamat sa pagbantay sa amin."/>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label>Story / Tribute</label>
+        <textarea id="story" placeholder="Write a warm, hopeful tribute..."></textarea>
+        <div class="small">Taglish is welcome. Keep it gentle and loving.</div>
+      </div>
+
+      <div class="grid" style="margin-top:14px;">
+        <div>
+          <label>Photo URL #1 (optional)</label>
+          <input id="p1" placeholder="https://..."/>
+        </div>
+        <div>
+          <label>Photo URL #2 (optional)</label>
+          <input id="p2" placeholder="https://..."/>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="primary" id="createBtn">Save Memorial + Generate QR</button>
+        <button id="seedBtn" type="button">Fill Sample Data</button>
+      </div>
+
+      <div class="result" id="result">
+        <hr style="border:none;border-top:1px solid var(--line);margin:18px 0;"/>
+        <div class="qrbox">
+          <div>
+            <strong>Your memorial is ready</strong>
+            <div class="small" style="margin:6px 0 10px;">Share this link or print the QR for a keepsake.</div>
+            <div class="mono" id="memorialLink"></div>
+            <div class="row" style="margin-top:10px;">
+              <button id="openBtn" type="button">Open Memorial</button>
+              <button id="copyBtn" type="button">Copy Link</button>
+            </div>
+          </div>
+          <div id="qrcode"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config (Project URL + anon key) -->
+  <script src="config.js"></script>
+
+  <!-- Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- QR code generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    // Optional debug: confirm config loaded (remove later if you want)
+    console.log("SUPABASE URL:", window.ALAALA_SUPABASE_URL);
+    console.log("ANON KEY exists:", !!window.ALAALA_SUPABASE_ANON_KEY);
+
+    const { createClient } = supabase;
+    const sb = createClient(window.ALAALA_SUPABASE_URL, window.ALAALA_SUPABASE_ANON_KEY);
+
+    const petName = document.getElementById("petName");
+    const species = document.getElementById("species");
+    const years = document.getElementById("years");
+    const tagline = document.getElementById("tagline");
+    const story = document.getElementById("story");
+    const p1 = document.getElementById("p1");
+    const p2 = document.getElementById("p2");
+
+    function slugifyBase(s){
+      return (s || "")
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 30) || "pet";
+    }
+    function rand4(){ return Math.random().toString(36).slice(2, 6); }
+
+    document.getElementById("seedBtn").addEventListener("click", () => {
+      petName.value = "Mochi";
+      species.value = "Cat";
+      years.value = "2016 — 2025";
+      tagline.value = "You were our calm in every storm.";
+      story.value = "Mochi loved sunny windows and quiet company. This space keeps her warmth close—para laging kasama pa rin sa puso.";
+      p1.value = "https://images.unsplash.com/photo-1543852786-1cf6624b9987?auto=format&fit=crop&w=1200&q=70";
+      p2.value = "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=1200&q=70";
+    });
+
+    document.getElementById("createBtn").addEventListener("click", async () => {
+      const name = petName.value.trim();
+      if (!name) return alert("Please enter your pet's name.");
+
+      const photos = [p1.value.trim(), p2.value.trim()].filter(Boolean);
+
+      // Unique-ish slug: mochi-9x3a
+      const slug = `${slugifyBase(name)}-${rand4()}`;
+
+      const payload = {
+        slug,
+        pet_name: name,
+        species: species.value.trim() || "Pet",
+        years: years.value.trim(),
+        tagline: tagline.value.trim(),
+        story: story.value.trim(),
+        photo_urls: photos
+      };
+
+      const btn = document.getElementById("createBtn");
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+
+      try {
+        console.log("Inserting payload:", payload);
+
+        const { data, error } = await sb
+          .from("memorials")
+          .insert(payload)
+          .select();
+
+        console.log("Insert data:", data);
+        console.log("Insert error:", error);
+
+        if (error) {
+          alert("Insert failed: " + error.message);
+          return;
+        }
+
+        // Build memorial URL (works locally AND later on GitHub Pages)
+        const url = new URL("memorial.html", window.location.href);
+        url.searchParams.set("m", slug);
+
+        // Show result + link
+        document.getElementById("result").style.display = "block";
+        document.getElementById("memorialLink").textContent = url.toString();
+
+        // Generate QR
+        const qr = document.getElementById("qrcode");
+        qr.innerHTML = "";
+        new QRCode(qr, { text: url.toString(), width: 170, height: 170 });
+
+        // Buttons
+        document.getElementById("openBtn").onclick = () => (window.location.href = url.toString());
+        document.getElementById("copyBtn").onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(url.toString());
+            alert("Link copied!");
+          } catch {
+            alert("Copy failed. Please copy manually:\n" + url.toString());
+          }
+        };
+
+      } catch (e) {
+        console.error("Insert threw exception:", e);
+        alert("Insert exception: " + (e?.message || e));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Memorial + Generate QR";
+      }
+    });
+  </script>
+</body>
+</html>
